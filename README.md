@@ -25,7 +25,7 @@ pip install batch-lp
 
 ```bash
 pip install maturin
-git clone https://github.com/yourusername/batch-lp.git
+git clone https://github.com/landonclark97/batch-lp.git
 cd batch-lp
 maturin develop --release
 ```
