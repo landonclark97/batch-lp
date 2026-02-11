@@ -12,6 +12,7 @@ use crate::LpProblem;
 ///          A_eq x == b_eq
 ///          lb <= x <= ub
 #[pyclass]
+#[allow(non_snake_case)]
 pub struct Problem {
     /// Objective coefficients (n,)
     #[pyo3(get, set)]
@@ -48,6 +49,7 @@ pub struct Problem {
 impl Problem {
     #[new]
     #[pyo3(signature = (c, A=None, b=None, A_eq=None, b_eq=None, lb=None, ub=None))]
+    #[allow(non_snake_case)]
     fn new(
         c: PyObject,
         A: Option<PyObject>,
@@ -135,10 +137,7 @@ impl PySolution {
 ///     Solution object containing status, objective_value, and x
 #[pyfunction]
 #[pyo3(signature = (problem))]
-fn solve_lp<'py>(
-    py: Python<'py>,
-    problem: Py<Problem>,
-) -> PyResult<PySolution> {
+fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> {
     let problem_ref = problem.borrow(py);
 
     // Extract c
@@ -166,36 +165,37 @@ fn solve_lp<'py>(
         (a_vec, b_vec)
     } else if problem_ref.A.is_some() || problem_ref.b.is_some() {
         return Err(PyValueError::new_err(
-            "Both 'A' and 'b' must be provided together"
+            "Both 'A' and 'b' must be provided together",
         ));
     } else {
         (vec![], vec![])
     };
 
     // Extract A_eq and b_eq
-    let (a_eq_vec, b_eq_vec) = if let (Some(a_obj), Some(b_obj)) = (&problem_ref.A_eq, &problem_ref.b_eq) {
-        let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
-        let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
+    let (a_eq_vec, b_eq_vec) =
+        if let (Some(a_obj), Some(b_obj)) = (&problem_ref.A_eq, &problem_ref.b_eq) {
+            let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+            let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
 
-        let a_array = a.as_array();
-        let b_vec = b.as_slice()?.to_vec();
+            let a_array = a.as_array();
+            let b_vec = b.as_slice()?.to_vec();
 
-        let mut a_vec = Vec::new();
-        for row_i in 0..a_array.shape()[0] {
-            let row: Vec<f64> = (0..a_array.shape()[1])
-                .map(|j| a_array[[row_i, j]])
-                .collect();
-            a_vec.push(row);
-        }
+            let mut a_vec = Vec::new();
+            for row_i in 0..a_array.shape()[0] {
+                let row: Vec<f64> = (0..a_array.shape()[1])
+                    .map(|j| a_array[[row_i, j]])
+                    .collect();
+                a_vec.push(row);
+            }
 
-        (a_vec, b_vec)
-    } else if problem_ref.A_eq.is_some() || problem_ref.b_eq.is_some() {
-        return Err(PyValueError::new_err(
-            "Both 'A_eq' and 'b_eq' must be provided together"
-        ));
-    } else {
-        (vec![], vec![])
-    };
+            (a_vec, b_vec)
+        } else if problem_ref.A_eq.is_some() || problem_ref.b_eq.is_some() {
+            return Err(PyValueError::new_err(
+                "Both 'A_eq' and 'b_eq' must be provided together",
+            ));
+        } else {
+            (vec![], vec![])
+        };
 
     // Extract bounds
     let lb_vec = if let Some(lb_obj) = &problem_ref.lb {
@@ -245,7 +245,11 @@ fn solve_lp<'py>(
 ///     Solutions for each problem
 #[pyfunction]
 #[pyo3(signature = (problems, num_threads=None))]
-fn solve_batch_lp(py: Python, problems: Vec<Py<Problem>>, num_threads: Option<usize>) -> PyResult<Vec<PySolution>> {
+fn solve_batch_lp(
+    py: Python,
+    problems: Vec<Py<Problem>>,
+    num_threads: Option<usize>,
+) -> PyResult<Vec<PySolution>> {
     let mut lp_problems = Vec::new();
 
     // Parse all problems first
@@ -277,36 +281,39 @@ fn solve_batch_lp(py: Python, problems: Vec<Py<Problem>>, num_threads: Option<us
             (a_vec, b_vec)
         } else if problem.A.is_some() || problem.b.is_some() {
             return Err(PyValueError::new_err(format!(
-                "Problem {}: Both 'A' and 'b' must be provided together", i
+                "Problem {}: Both 'A' and 'b' must be provided together",
+                i
             )));
         } else {
             (vec![], vec![])
         };
 
         // Extract A_eq and b_eq
-        let (a_eq_vec, b_eq_vec) = if let (Some(a_obj), Some(b_obj)) = (&problem.A_eq, &problem.b_eq) {
-            let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
-            let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
+        let (a_eq_vec, b_eq_vec) =
+            if let (Some(a_obj), Some(b_obj)) = (&problem.A_eq, &problem.b_eq) {
+                let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+                let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
 
-            let a_array = a.as_array();
-            let b_vec = b.as_slice()?.to_vec();
+                let a_array = a.as_array();
+                let b_vec = b.as_slice()?.to_vec();
 
-            let mut a_vec = Vec::new();
-            for row_i in 0..a_array.shape()[0] {
-                let row: Vec<f64> = (0..a_array.shape()[1])
-                    .map(|j| a_array[[row_i, j]])
-                    .collect();
-                a_vec.push(row);
-            }
+                let mut a_vec = Vec::new();
+                for row_i in 0..a_array.shape()[0] {
+                    let row: Vec<f64> = (0..a_array.shape()[1])
+                        .map(|j| a_array[[row_i, j]])
+                        .collect();
+                    a_vec.push(row);
+                }
 
-            (a_vec, b_vec)
-        } else if problem.A_eq.is_some() || problem.b_eq.is_some() {
-            return Err(PyValueError::new_err(format!(
-                "Problem {}: Both 'A_eq' and 'b_eq' must be provided together", i
-            )));
-        } else {
-            (vec![], vec![])
-        };
+                (a_vec, b_vec)
+            } else if problem.A_eq.is_some() || problem.b_eq.is_some() {
+                return Err(PyValueError::new_err(format!(
+                    "Problem {}: Both 'A_eq' and 'b_eq' must be provided together",
+                    i
+                )));
+            } else {
+                (vec![], vec![])
+            };
 
         // Extract bounds
         let lb_vec = if let Some(lb_obj) = &problem.lb {
@@ -330,11 +337,9 @@ fn solve_batch_lp(py: Python, problems: Vec<Py<Problem>>, num_threads: Option<us
     }
 
     // Solve all problems in parallel (releasing GIL)
-    let solutions = py.allow_threads(|| {
-        match num_threads {
-            Some(n) => crate::solve_batch_with_threads(&lp_problems, n),
-            None => crate::solve_batch(&lp_problems),
-        }
+    let solutions = py.allow_threads(|| match num_threads {
+        Some(n) => crate::solve_batch_with_threads(&lp_problems, n),
+        None => crate::solve_batch(&lp_problems),
     });
 
     // Convert to Python solutions

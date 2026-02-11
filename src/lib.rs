@@ -1,4 +1,4 @@
-use highs::{RowProblem, Col, Sense};
+use highs::{Col, RowProblem, Sense};
 use rayon::prelude::*;
 use std::fmt;
 
@@ -54,13 +54,13 @@ pub struct LpSolution {
 ///      lb <= x <= ub
 #[derive(Debug, Clone)]
 pub struct LpProblem {
-    pub c: Vec<f64>,              // Objective coefficients (n,)
-    pub a_ineq: Vec<Vec<f64>>,    // Inequality constraint matrix (m_ineq, n)
-    pub b_ineq: Vec<f64>,         // Inequality RHS (m_ineq,)
-    pub a_eq: Vec<Vec<f64>>,      // Equality constraint matrix (m_eq, n)
-    pub b_eq: Vec<f64>,           // Equality RHS (m_eq,)
-    pub lb: Vec<f64>,             // Lower bounds (n,)
-    pub ub: Vec<f64>,             // Upper bounds (n,)
+    pub c: Vec<f64>,           // Objective coefficients (n,)
+    pub a_ineq: Vec<Vec<f64>>, // Inequality constraint matrix (m_ineq, n)
+    pub b_ineq: Vec<f64>,      // Inequality RHS (m_ineq,)
+    pub a_eq: Vec<Vec<f64>>,   // Equality constraint matrix (m_eq, n)
+    pub b_eq: Vec<f64>,        // Equality RHS (m_eq,)
+    pub lb: Vec<f64>,          // Lower bounds (n,)
+    pub ub: Vec<f64>,          // Upper bounds (n,)
 }
 
 impl LpProblem {
@@ -78,37 +78,50 @@ impl LpProblem {
 
         // Validate dimensions
         if lb.len() != n || ub.len() != n {
-            return Err(BatchLpError::InvalidDimensions(
-                format!("Bounds dimension mismatch: c={}, lb={}, ub={}", n, lb.len(), ub.len())
-            ));
+            return Err(BatchLpError::InvalidDimensions(format!(
+                "Bounds dimension mismatch: c={}, lb={}, ub={}",
+                n,
+                lb.len(),
+                ub.len()
+            )));
         }
 
         if !a_ineq.is_empty() {
             if a_ineq.len() != b_ineq.len() {
-                return Err(BatchLpError::InvalidDimensions(
-                    format!("Inequality constraint mismatch: A rows={}, b={}", a_ineq.len(), b_ineq.len())
-                ));
+                return Err(BatchLpError::InvalidDimensions(format!(
+                    "Inequality constraint mismatch: A rows={}, b={}",
+                    a_ineq.len(),
+                    b_ineq.len()
+                )));
             }
             for (i, row) in a_ineq.iter().enumerate() {
                 if row.len() != n {
-                    return Err(BatchLpError::InvalidDimensions(
-                        format!("Inequality constraint row {} has {} columns, expected {}", i, row.len(), n)
-                    ));
+                    return Err(BatchLpError::InvalidDimensions(format!(
+                        "Inequality constraint row {} has {} columns, expected {}",
+                        i,
+                        row.len(),
+                        n
+                    )));
                 }
             }
         }
 
         if !a_eq.is_empty() {
             if a_eq.len() != b_eq.len() {
-                return Err(BatchLpError::InvalidDimensions(
-                    format!("Equality constraint mismatch: A_eq rows={}, b_eq={}", a_eq.len(), b_eq.len())
-                ));
+                return Err(BatchLpError::InvalidDimensions(format!(
+                    "Equality constraint mismatch: A_eq rows={}, b_eq={}",
+                    a_eq.len(),
+                    b_eq.len()
+                )));
             }
             for (i, row) in a_eq.iter().enumerate() {
                 if row.len() != n {
-                    return Err(BatchLpError::InvalidDimensions(
-                        format!("Equality constraint row {} has {} columns, expected {}", i, row.len(), n)
-                    ));
+                    return Err(BatchLpError::InvalidDimensions(format!(
+                        "Equality constraint row {} has {} columns, expected {}",
+                        i,
+                        row.len(),
+                        n
+                    )));
                 }
             }
         }
@@ -214,9 +227,7 @@ pub fn solve_batch_with_threads(
         .unwrap();
 
     // Use the custom pool to solve
-    pool.install(|| {
-        problems.par_iter().map(|problem| problem.solve()).collect()
-    })
+    pool.install(|| problems.par_iter().map(|problem| problem.solve()).collect())
 }
 
 #[cfg(test)]
@@ -229,14 +240,15 @@ mod tests {
         // s.t. x + y <= 2
         //      x, y >= 0
         let problem = LpProblem::new(
-            vec![-1.0, -1.0],                    // c
-            vec![vec![1.0, 1.0]],                // A
-            vec![2.0],                            // b
-            vec![],                               // A_eq
-            vec![],                               // b_eq
-            vec![0.0, 0.0],                       // lb
-            vec![f64::INFINITY, f64::INFINITY],  // ub
-        ).unwrap();
+            vec![-1.0, -1.0],                   // c
+            vec![vec![1.0, 1.0]],               // A
+            vec![2.0],                          // b
+            vec![],                             // A_eq
+            vec![],                             // b_eq
+            vec![0.0, 0.0],                     // lb
+            vec![f64::INFINITY, f64::INFINITY], // ub
+        )
+        .unwrap();
 
         let solution = problem.solve().unwrap();
         assert_eq!(solution.status, SolutionStatus::Optimal);
@@ -253,7 +265,8 @@ mod tests {
             vec![],
             vec![0.0, 0.0],
             vec![f64::INFINITY, f64::INFINITY],
-        ).unwrap();
+        )
+        .unwrap();
 
         let problem2 = LpProblem::new(
             vec![-1.0, -1.0],
@@ -263,7 +276,8 @@ mod tests {
             vec![],
             vec![0.0, 0.0],
             vec![f64::INFINITY, f64::INFINITY],
-        ).unwrap();
+        )
+        .unwrap();
 
         let solutions = solve_batch(&[problem1, problem2]);
         assert_eq!(solutions.len(), 2);
