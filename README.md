@@ -50,7 +50,7 @@ problem = Problem(c=c, A=A, b=b)
 solution = solve_lp(problem)
 
 print(f"Status: {solution.status}")
-print(f"Objective: {solution.objective_value}")
+print(f"Objective: {solution.objective}")
 print(f"Solution: {solution.x}")
 ```
 
@@ -73,7 +73,7 @@ for i in range(100):
 solutions = solve_batch_lp(problems)
 
 for i, sol in enumerate(solutions[:5]):
-    print(f"Problem {i}: {sol.status}, obj={sol.objective_value}")
+    print(f"Problem {i}: {sol.status}, obj={sol.objective}")
 ```
 
 ### Control Number of Threads

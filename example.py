@@ -31,7 +31,7 @@ def example_single_lp():
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")
-    print(f"Objective value: {solution.objective_value}")
+    print(f"Objective value: {solution.objective}")
     print(f"Solution: {solution.x}")
     print()
 
@@ -57,7 +57,7 @@ def example_with_equality():
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")
-    print(f"Objective value: {solution.objective_value}")
+    print(f"Objective value: {solution.objective}")
     print(f"Solution: {solution.x}")
     print()
 
@@ -86,7 +86,7 @@ def example_with_bounds():
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")
-    print(f"Objective value: {solution.objective_value}")
+    print(f"Objective value: {solution.objective}")
     print(f"Solution: {solution.x}")
     print()
 
@@ -118,7 +118,7 @@ def example_batch_solve():
 
     # Show first few results
     for i, sol in enumerate(solutions[:5]):
-        print(f"Problem {i}: status={sol.status}, objective={sol.objective_value:.4f}")
+        print(f"Problem {i}: status={sol.status}, objective={sol.objective:.4f}")
     print()
 
 
@@ -185,7 +185,7 @@ def example_portfolio_optimization():
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")
-    print(f"Expected return: {-solution.objective_value:.4f}")
+    print(f"Expected return: {-solution.objective:.4f}")
     print(f"Optimal weights: {solution.x}")
     print(f"Sum of weights: {np.sum(solution.x):.6f}")
     print()

@@ -4,6 +4,26 @@ use pyo3::prelude::*;
 
 use crate::LpProblem;
 
+/// Extract a bound parameter: None → fill with `default`, scalar → broadcast, array → per-variable.
+fn extract_bound(
+    py: Python,
+    obj: &Option<PyObject>,
+    n: usize,
+    default: f64,
+) -> PyResult<Vec<f64>> {
+    match obj {
+        None => Ok(vec![default; n]),
+        Some(obj) => {
+            let bound = obj.bind(py);
+            if let Ok(val) = bound.extract::<f64>() {
+                return Ok(vec![val; n]);
+            }
+            let arr: PyReadonlyArray1<f64> = bound.extract()?;
+            Ok(arr.as_slice()?.to_vec())
+        }
+    }
+}
+
 /// Linear programming problem definition
 ///
 /// Represents an LP problem in standard form:
@@ -36,11 +56,11 @@ pub struct Problem {
     #[pyo3(get, set)]
     pub b_eq: Option<PyObject>,
 
-    /// Lower bounds (n,) - optional, defaults to zeros
+    /// Lower bounds: scalar=broadcast, array=per-variable, None=default (0)
     #[pyo3(get, set)]
     pub lb: Option<PyObject>,
 
-    /// Upper bounds (n,) - optional, defaults to infinity
+    /// Upper bounds: scalar=broadcast, array=per-variable, None=default (+inf)
     #[pyo3(get, set)]
     pub ub: Option<PyObject>,
 }
@@ -49,7 +69,7 @@ pub struct Problem {
 impl Problem {
     #[new]
     #[pyo3(signature = (c, A=None, b=None, A_eq=None, b_eq=None, lb=None, ub=None))]
-    #[allow(non_snake_case)]
+    #[allow(non_snake_case, clippy::too_many_arguments)]
     fn new(
         c: PyObject,
         A: Option<PyObject>,
@@ -71,21 +91,15 @@ impl Problem {
     }
 
     fn __repr__(&self) -> String {
-        let fields = vec![
-            "c",
-            if self.A.is_some() { "A" } else { "" },
-            if self.b.is_some() { "b" } else { "" },
-            if self.A_eq.is_some() { "A_eq" } else { "" },
-            if self.b_eq.is_some() { "b_eq" } else { "" },
-            if self.lb.is_some() { "lb" } else { "" },
-            if self.ub.is_some() { "ub" } else { "" },
-        ]
-        .into_iter()
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(", ");
+        let mut fields = vec!["c"];
+        if self.A.is_some() { fields.push("A"); }
+        if self.b.is_some() { fields.push("b"); }
+        if self.A_eq.is_some() { fields.push("A_eq"); }
+        if self.b_eq.is_some() { fields.push("b_eq"); }
+        if self.lb.is_some() { fields.push("lb"); }
+        if self.ub.is_some() { fields.push("ub"); }
 
-        format!("Problem({})", fields)
+        format!("Problem({})", fields.join(", "))
     }
 }
 
@@ -96,7 +110,7 @@ pub struct PySolution {
     #[pyo3(get)]
     pub status: String,
     #[pyo3(get)]
-    pub objective_value: Option<f64>,
+    pub objective: Option<f64>,
     pub x_vec: Option<Vec<f64>>,
 }
 
@@ -111,7 +125,7 @@ impl PySolution {
     }
 
     fn __repr__(&self) -> String {
-        match self.objective_value {
+        match self.objective {
             Some(val) => format!("Result(status='{}', objective={:.6})", self.status, val),
             None => format!("Result(status='{}')", self.status),
         }
@@ -134,7 +148,7 @@ impl PySolution {
 /// Returns
 /// -------
 /// Result
-///     Result object containing status, objective_value, and x
+///     Result object containing status, objective, and x
 #[pyfunction]
 #[pyo3(signature = (problem))]
 fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> {
@@ -198,19 +212,8 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
         };
 
     // Extract bounds
-    let lb_vec = if let Some(lb_obj) = &problem_ref.lb {
-        let lb: PyReadonlyArray1<f64> = lb_obj.bind(py).extract()?;
-        lb.as_slice()?.to_vec()
-    } else {
-        vec![0.0; n]
-    };
-
-    let ub_vec = if let Some(ub_obj) = &problem_ref.ub {
-        let ub: PyReadonlyArray1<f64> = ub_obj.bind(py).extract()?;
-        ub.as_slice()?.to_vec()
-    } else {
-        vec![f64::INFINITY; n]
-    };
+    let lb_vec = extract_bound(py, &problem_ref.lb, n, 0.0)?;
+    let ub_vec = extract_bound(py, &problem_ref.ub, n, f64::INFINITY)?;
 
     // Create and solve problem
     let lp_problem = LpProblem::new(c_vec, a_ineq, b_ineq, a_eq_vec, b_eq_vec, lb_vec, ub_vec)
@@ -223,7 +226,7 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
 
         Ok(PySolution {
             status: solution.status.to_string(),
-            objective_value: solution.objective_value,
+            objective: solution.objective,
             x_vec: solution.x,
         })
     })
@@ -316,19 +319,8 @@ fn solve_batch_lp(
             };
 
         // Extract bounds
-        let lb_vec = if let Some(lb_obj) = &problem.lb {
-            let lb: PyReadonlyArray1<f64> = lb_obj.bind(py).extract()?;
-            lb.as_slice()?.to_vec()
-        } else {
-            vec![0.0; n]
-        };
-
-        let ub_vec = if let Some(ub_obj) = &problem.ub {
-            let ub: PyReadonlyArray1<f64> = ub_obj.bind(py).extract()?;
-            ub.as_slice()?.to_vec()
-        } else {
-            vec![f64::INFINITY; n]
-        };
+        let lb_vec = extract_bound(py, &problem.lb, n, 0.0)?;
+        let ub_vec = extract_bound(py, &problem.ub, n, f64::INFINITY)?;
 
         let lp_problem = LpProblem::new(c_vec, a_ineq, b_ineq, a_eq_vec, b_eq_vec, lb_vec, ub_vec)
             .map_err(|e| PyValueError::new_err(format!("Problem {}: {}", i, e)))?;
@@ -350,7 +342,7 @@ fn solve_batch_lp(
             result
                 .map(|sol| PySolution {
                     status: sol.status.to_string(),
-                    objective_value: sol.objective_value,
+                    objective: sol.objective,
                     x_vec: sol.x,
                 })
                 .map_err(|e| PyRuntimeError::new_err(format!("Problem {}: {}", i, e)))

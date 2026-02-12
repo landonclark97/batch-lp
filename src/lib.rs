@@ -44,7 +44,7 @@ impl fmt::Display for SolutionStatus {
 #[derive(Debug, Clone)]
 pub struct LpSolution {
     pub status: SolutionStatus,
-    pub objective_value: Option<f64>,
+    pub objective: Option<f64>,
     pub x: Option<Vec<f64>>,
 }
 
@@ -194,17 +194,17 @@ impl LpProblem {
         if status == SolutionStatus::Optimal {
             let solution = solved.get_solution();
             let x = solution.columns().to_vec();
-            let objective_value = solved.objective_value();
+            let objective = solved.objective_value();
 
             Ok(LpSolution {
                 status,
-                objective_value: Some(objective_value),
+                objective: Some(objective),
                 x: Some(x),
             })
         } else {
             Ok(LpSolution {
                 status,
-                objective_value: None,
+                objective: None,
                 x: None,
             })
         }
@@ -253,7 +253,7 @@ mod tests {
 
         let solution = problem.solve().unwrap();
         assert_eq!(solution.status, SolutionStatus::Optimal);
-        assert!((solution.objective_value.unwrap() - (-2.0)).abs() < 1e-6);
+        assert!((solution.objective.unwrap() - (-2.0)).abs() < 1e-6);
     }
 
     #[test]
