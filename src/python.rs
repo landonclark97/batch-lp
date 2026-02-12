@@ -5,12 +5,7 @@ use pyo3::prelude::*;
 use crate::LpProblem;
 
 /// Extract a bound parameter: None → fill with `default`, scalar → broadcast, array → per-variable.
-fn extract_bound(
-    py: Python,
-    obj: &Option<PyObject>,
-    n: usize,
-    default: f64,
-) -> PyResult<Vec<f64>> {
+fn extract_bound(py: Python, obj: &Option<PyObject>, n: usize, default: f64) -> PyResult<Vec<f64>> {
     match obj {
         None => Ok(vec![default; n]),
         Some(obj) => {
@@ -92,12 +87,24 @@ impl Problem {
 
     fn __repr__(&self) -> String {
         let mut fields = vec!["c"];
-        if self.A.is_some() { fields.push("A"); }
-        if self.b.is_some() { fields.push("b"); }
-        if self.A_eq.is_some() { fields.push("A_eq"); }
-        if self.b_eq.is_some() { fields.push("b_eq"); }
-        if self.lb.is_some() { fields.push("lb"); }
-        if self.ub.is_some() { fields.push("ub"); }
+        if self.A.is_some() {
+            fields.push("A");
+        }
+        if self.b.is_some() {
+            fields.push("b");
+        }
+        if self.A_eq.is_some() {
+            fields.push("A_eq");
+        }
+        if self.b_eq.is_some() {
+            fields.push("b_eq");
+        }
+        if self.lb.is_some() {
+            fields.push("lb");
+        }
+        if self.ub.is_some() {
+            fields.push("ub");
+        }
 
         format!("Problem({})", fields.join(", "))
     }
