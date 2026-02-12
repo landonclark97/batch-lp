@@ -51,7 +51,7 @@ solution = solve_lp(problem)
 
 print(f"Status: {solution.status}")
 print(f"Objective: {solution.objective_value}")
-print(f"Solution: {solution.get_x()}")
+print(f"Solution: {solution.x}")
 ```
 
 ### Solve Multiple LPs in Parallel

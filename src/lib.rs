@@ -2,6 +2,7 @@ use highs::{Col, RowProblem, Sense};
 use rayon::prelude::*;
 use std::fmt;
 
+#[allow(clippy::useless_conversion, clippy::needless_lifetimes)]
 pub mod python;
 
 /// Error types for the batched LP solver

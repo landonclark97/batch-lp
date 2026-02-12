@@ -32,7 +32,7 @@ def example_single_lp():
 
     print(f"Status: {solution.status}")
     print(f"Objective value: {solution.objective_value}")
-    print(f"Solution: {solution.get_x()}")
+    print(f"Solution: {solution.x}")
     print()
 
 
@@ -58,7 +58,7 @@ def example_with_equality():
 
     print(f"Status: {solution.status}")
     print(f"Objective value: {solution.objective_value}")
-    print(f"Solution: {solution.get_x()}")
+    print(f"Solution: {solution.x}")
     print()
 
 
@@ -87,7 +87,7 @@ def example_with_bounds():
 
     print(f"Status: {solution.status}")
     print(f"Objective value: {solution.objective_value}")
-    print(f"Solution: {solution.get_x()}")
+    print(f"Solution: {solution.x}")
     print()
 
 
@@ -186,8 +186,8 @@ def example_portfolio_optimization():
 
     print(f"Status: {solution.status}")
     print(f"Expected return: {-solution.objective_value:.4f}")
-    print(f"Optimal weights: {solution.get_x()}")
-    print(f"Sum of weights: {np.sum(solution.get_x()):.6f}")
+    print(f"Optimal weights: {solution.x}")
+    print(f"Sum of weights: {np.sum(solution.x):.6f}")
     print()
 
 

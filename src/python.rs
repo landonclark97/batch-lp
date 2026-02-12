@@ -90,21 +90,21 @@ impl Problem {
 }
 
 /// Python wrapper for LP solution
-#[pyclass]
+#[pyclass(name = "Result")]
 #[derive(Clone)]
 pub struct PySolution {
     #[pyo3(get)]
     pub status: String,
     #[pyo3(get)]
     pub objective_value: Option<f64>,
-    pub x: Option<Vec<f64>>,
+    pub x_vec: Option<Vec<f64>>,
 }
 
 #[pymethods]
 impl PySolution {
-    /// Get the solution vector as a numpy array
-    fn get_x<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
-        match &self.x {
+    #[getter]
+    fn x<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyArray1<f64>>>> {
+        match &self.x_vec {
             Some(x) => Ok(Some(PyArray1::from_vec_bound(py, x.clone()))),
             None => Ok(None),
         }
@@ -112,8 +112,8 @@ impl PySolution {
 
     fn __repr__(&self) -> String {
         match self.objective_value {
-            Some(val) => format!("Solution(status='{}', objective={:.6})", self.status, val),
-            None => format!("Solution(status='{}')", self.status),
+            Some(val) => format!("Result(status='{}', objective={:.6})", self.status, val),
+            None => format!("Result(status='{}')", self.status),
         }
     }
 }
@@ -133,8 +133,8 @@ impl PySolution {
 ///
 /// Returns
 /// -------
-/// PySolution
-///     Solution object containing status, objective_value, and x
+/// Result
+///     Result object containing status, objective_value, and x
 #[pyfunction]
 #[pyo3(signature = (problem))]
 fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> {
@@ -224,7 +224,7 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
         Ok(PySolution {
             status: solution.status.to_string(),
             objective_value: solution.objective_value,
-            x: solution.x,
+            x_vec: solution.x,
         })
     })
 }
@@ -241,8 +241,8 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
 ///
 /// Returns
 /// -------
-/// list of PySolution
-///     Solutions for each problem
+/// list of Result
+///     Result for each problem
 #[pyfunction]
 #[pyo3(signature = (problems, num_threads=None))]
 fn solve_batch_lp(
@@ -351,7 +351,7 @@ fn solve_batch_lp(
                 .map(|sol| PySolution {
                     status: sol.status.to_string(),
                     objective_value: sol.objective_value,
-                    x: sol.x,
+                    x_vec: sol.x,
                 })
                 .map_err(|e| PyRuntimeError::new_err(format!("Problem {}: {}", i, e)))
         })
