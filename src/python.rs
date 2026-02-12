@@ -4,19 +4,36 @@ use pyo3::prelude::*;
 
 use crate::LpProblem;
 
-/// Extract a bound parameter: None → fill with `default`, scalar → broadcast, array → per-variable.
-fn extract_bound(py: Python, obj: &Option<PyObject>, n: usize, default: f64) -> PyResult<Vec<f64>> {
-    match obj {
-        None => Ok(vec![default; n]),
-        Some(obj) => {
-            let bound = obj.bind(py);
-            if let Ok(val) = bound.extract::<f64>() {
-                return Ok(vec![val; n]);
-            }
-            let arr: PyReadonlyArray1<f64> = bound.extract()?;
-            Ok(arr.as_slice()?.to_vec())
-        }
+/// Extract a single bound element: None → fill with `default`, scalar → broadcast, array → per-variable.
+fn extract_bound(_py: Python, obj: &Bound<'_, PyAny>, n: usize, default: f64) -> PyResult<Vec<f64>> {
+    if obj.is_none() {
+        return Ok(vec![default; n]);
     }
+    if let Ok(val) = obj.extract::<f64>() {
+        return Ok(vec![val; n]);
+    }
+    let arr: PyReadonlyArray1<f64> = obj.extract()?;
+    Ok(arr.as_slice()?.to_vec())
+}
+
+/// Extract bounds tuple: (lower, upper) where each element is None, scalar, or array.
+fn extract_bounds(
+    py: Python,
+    bounds: &PyObject,
+    n: usize,
+) -> PyResult<(Vec<f64>, Vec<f64>)> {
+    let tuple = bounds.bind(py);
+    let tuple = tuple.downcast::<pyo3::types::PyTuple>().map_err(|_| {
+        PyValueError::new_err("'bounds' must be a tuple of (lower, upper)")
+    })?;
+    if tuple.len() != 2 {
+        return Err(PyValueError::new_err(
+            "'bounds' must be a tuple of exactly 2 elements (lower, upper)",
+        ));
+    }
+    let lb = extract_bound(py, &tuple.get_item(0)?, n, f64::NEG_INFINITY)?;
+    let ub = extract_bound(py, &tuple.get_item(1)?, n, f64::INFINITY)?;
+    Ok((lb, ub))
 }
 
 /// Linear programming problem definition
@@ -51,37 +68,36 @@ pub struct Problem {
     #[pyo3(get, set)]
     pub b_eq: Option<PyObject>,
 
-    /// Lower bounds: scalar=broadcast, array=per-variable, None=default (0)
+    /// Variable bounds as (lower, upper) tuple.
+    /// Each element: None → no bound (lower=-inf, upper=+inf), scalar → broadcast, array → per-variable.
     #[pyo3(get, set)]
-    pub lb: Option<PyObject>,
-
-    /// Upper bounds: scalar=broadcast, array=per-variable, None=default (+inf)
-    #[pyo3(get, set)]
-    pub ub: Option<PyObject>,
+    pub bounds: PyObject,
 }
 
 #[pymethods]
 impl Problem {
     #[new]
-    #[pyo3(signature = (c, A=None, b=None, A_eq=None, b_eq=None, lb=None, ub=None))]
+    #[pyo3(signature = (c, A=None, b=None, A_eq=None, b_eq=None, bounds=None))]
     #[allow(non_snake_case, clippy::too_many_arguments)]
     fn new(
+        py: Python,
         c: PyObject,
         A: Option<PyObject>,
         b: Option<PyObject>,
         A_eq: Option<PyObject>,
         b_eq: Option<PyObject>,
-        lb: Option<PyObject>,
-        ub: Option<PyObject>,
+        bounds: Option<PyObject>,
     ) -> Self {
+        let bounds = bounds.unwrap_or_else(|| {
+            pyo3::types::PyTuple::new_bound(py, &[0.0.into_py(py), py.None()]).into()
+        });
         Problem {
             c,
             A,
             b,
             A_eq,
             b_eq,
-            lb,
-            ub,
+            bounds,
         }
     }
 
@@ -99,12 +115,7 @@ impl Problem {
         if self.b_eq.is_some() {
             fields.push("b_eq");
         }
-        if self.lb.is_some() {
-            fields.push("lb");
-        }
-        if self.ub.is_some() {
-            fields.push("ub");
-        }
+        fields.push("bounds");
 
         format!("Problem({})", fields.join(", "))
     }
@@ -219,8 +230,7 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
         };
 
     // Extract bounds
-    let lb_vec = extract_bound(py, &problem_ref.lb, n, 0.0)?;
-    let ub_vec = extract_bound(py, &problem_ref.ub, n, f64::INFINITY)?;
+    let (lb_vec, ub_vec) = extract_bounds(py, &problem_ref.bounds, n)?;
 
     // Create and solve problem
     let lp_problem = LpProblem::new(c_vec, a_ineq, b_ineq, a_eq_vec, b_eq_vec, lb_vec, ub_vec)
@@ -326,8 +336,7 @@ fn solve_batch_lp(
             };
 
         // Extract bounds
-        let lb_vec = extract_bound(py, &problem.lb, n, 0.0)?;
-        let ub_vec = extract_bound(py, &problem.ub, n, f64::INFINITY)?;
+        let (lb_vec, ub_vec) = extract_bounds(py, &problem.bounds, n)?;
 
         let lp_problem = LpProblem::new(c_vec, a_ineq, b_ineq, a_eq_vec, b_eq_vec, lb_vec, ub_vec)
             .map_err(|e| PyValueError::new_err(format!("Problem {}: {}", i, e)))?;

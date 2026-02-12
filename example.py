@@ -79,10 +79,8 @@ def example_with_bounds():
     c = np.array([1.0, 1.0])
     A = np.array([[-1.0, -2.0]])  # -(x + 2y) <= -4  =>  x + 2y >= 4
     b = np.array([-4.0])
-    lb = np.array([1.0, 2.0])
-    ub = np.array([5.0, 6.0])
 
-    problem = Problem(c=c, A=A, b=b, lb=lb, ub=ub)
+    problem = Problem(c=c, A=A, b=b, bounds=(np.array([1.0, 2.0]), np.array([5.0, 6.0])))
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")
@@ -139,8 +137,7 @@ def example_thread_control():
             c=np.random.randn(n_vars),
             A=np.random.randn(n_constraints, n_vars),
             b=np.random.rand(n_constraints) * 10,
-            lb=np.zeros(n_vars),
-            ub=np.ones(n_vars) * 10,
+            bounds=(0, 10),
         ))
 
     # Solve with different thread counts
@@ -167,8 +164,6 @@ def example_portfolio_optimization():
     print("Example 6: Portfolio Optimization")
     print("=" * 60)
 
-    n_assets = 5
-
     # Expected returns for 5 assets
     expected_returns = np.array([0.05, 0.08, 0.12, 0.07, 0.10])
     c = -expected_returns  # Maximize by minimizing negative
@@ -178,10 +173,7 @@ def example_portfolio_optimization():
     b_eq = np.array([1.0])
 
     # Bounds: 0 <= weight <= 0.4 (max 40% in any asset)
-    lb = np.zeros(n_assets)
-    ub = np.full(n_assets, 0.4)
-
-    problem = Problem(c=c, A_eq=A_eq, b_eq=b_eq, lb=lb, ub=ub)
+    problem = Problem(c=c, A_eq=A_eq, b_eq=b_eq, bounds=(0, 0.4))
     solution = solve_lp(problem)
 
     print(f"Status: {solution.status}")

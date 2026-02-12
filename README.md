@@ -114,8 +114,7 @@ problem = Problem(
     b=np.array([5.0]),                # Inequality RHS (optional)
     A_eq=np.array([[1.0, -1.0]]),     # Equality constraint matrix (optional)
     b_eq=np.array([0.0]),             # Equality RHS (optional)
-    lb=np.array([0.0, 0.0]),          # Lower bounds (optional, default: zeros)
-    ub=np.array([10.0, 10.0]),        # Upper bounds (optional, default: inf)
+    bounds=(0, 10),                   # Variable bounds (optional, default: (0, None))
 )
 ```
 
@@ -128,26 +127,30 @@ problem = Problem(
 | `b` | ndarray | Inequality RHS (m_ineq,) | `None` |
 | `A_eq` | ndarray | Equality constraint matrix (m_eq, n) | `None` |
 | `b_eq` | ndarray | Equality RHS (m_eq,) | `None` |
-| `lb` | ndarray | Lower bounds (n,) | `zeros` |
-| `ub` | ndarray | Upper bounds (n,) | `inf` |
+| `bounds` | tuple | Variable bounds as `(lower, upper)` | `(0, None)` |
 
-#### Turning Off Bounds
+#### Bounds
 
-By default, variables are constrained to be non-negative (`lb=0`, `ub=∞`). To allow unbounded variables:
+The `bounds` parameter is a tuple `(lower, upper)` where each element can be:
+- `None` — no bound (`-inf` for lower, `+inf` for upper)
+- scalar — broadcast to all variables
+- ndarray — per-variable bounds
 
 ```python
-# Allow negative values (unbounded below)
-lb = np.full(n, -np.inf)
+# Default: non-negative variables (0 <= x <= inf)
+Problem(c=c, A=A, b=b)
 
-# Remove upper bounds (unbounded above) - this is already the default
-ub = np.full(n, np.inf)
+# Scalar bounds broadcast to all variables
+Problem(c=c, bounds=(0, 10))
 
 # Completely unbounded variables
-problem = Problem(
-    c=np.array([1.0, 2.0]),
-    lb=np.array([-np.inf, -np.inf]),  # Can be negative
-    ub=np.array([np.inf, np.inf]),    # Can be arbitrarily large
-)
+Problem(c=c, bounds=(None, None))
+
+# Per-variable bounds
+Problem(c=c, bounds=(np.array([0, -1, 0]), np.array([10, 5, 20])))
+
+# Mix scalar and per-variable
+Problem(c=c, bounds=(0, np.array([10, 5, 20])))
 ```
 
 ## Examples
