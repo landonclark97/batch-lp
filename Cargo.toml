@@ -1,6 +1,6 @@
 [package]
 name = "batch-lp"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["batch-lp contributors"]
 description = "High-performance batched linear programming solver using HiGHS with parallel execution"
@@ -20,7 +20,7 @@ rayon = "1.10"
 thiserror = "1.0"
 
 # Python bindings
-pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py39"] }
 numpy = "0.22"
 
 [profile.release]
