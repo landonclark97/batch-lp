@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "batch-lp"
-version = "1.0.2"
+version = "1.0.3"
 description = "High-performance batched linear programming solver using HiGHS with parallel execution"
 readme = "README.md"
 requires-python = ">=3.9"

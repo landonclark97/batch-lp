@@ -55,22 +55,22 @@ pub struct LpSolution {
 ///      lb <= x <= ub
 #[derive(Debug, Clone)]
 pub struct LpProblem {
-    pub c: Vec<f64>,           // Objective coefficients (n,)
-    pub a_ineq: Vec<Vec<f64>>, // Inequality constraint matrix (m_ineq, n)
-    pub b_ineq: Vec<f64>,      // Inequality RHS (m_ineq,)
-    pub a_eq: Vec<Vec<f64>>,   // Equality constraint matrix (m_eq, n)
-    pub b_eq: Vec<f64>,        // Equality RHS (m_eq,)
-    pub lb: Vec<f64>,          // Lower bounds (n,)
-    pub ub: Vec<f64>,          // Upper bounds (n,)
+    pub c: Vec<f64>,                    // Objective coefficients (n,)
+    pub a_ineq: Vec<Vec<(usize, f64)>>, // Inequality constraints, sparse rows (col_index, coeff)
+    pub b_ineq: Vec<f64>,               // Inequality RHS (m_ineq,)
+    pub a_eq: Vec<Vec<(usize, f64)>>,   // Equality constraints, sparse rows (col_index, coeff)
+    pub b_eq: Vec<f64>,                 // Equality RHS (m_eq,)
+    pub lb: Vec<f64>,                   // Lower bounds (n,)
+    pub ub: Vec<f64>,                   // Upper bounds (n,)
 }
 
 impl LpProblem {
     /// Create a new LP problem with validation
     pub fn new(
         c: Vec<f64>,
-        a_ineq: Vec<Vec<f64>>,
+        a_ineq: Vec<Vec<(usize, f64)>>,
         b_ineq: Vec<f64>,
-        a_eq: Vec<Vec<f64>>,
+        a_eq: Vec<Vec<(usize, f64)>>,
         b_eq: Vec<f64>,
         lb: Vec<f64>,
         ub: Vec<f64>,
@@ -96,13 +96,13 @@ impl LpProblem {
                 )));
             }
             for (i, row) in a_ineq.iter().enumerate() {
-                if row.len() != n {
-                    return Err(BatchLpError::InvalidDimensions(format!(
-                        "Inequality constraint row {} has {} columns, expected {}",
-                        i,
-                        row.len(),
-                        n
-                    )));
+                for &(col, _) in row {
+                    if col >= n {
+                        return Err(BatchLpError::InvalidDimensions(format!(
+                            "Inequality constraint row {} has column index {}, expected < {}",
+                            i, col, n
+                        )));
+                    }
                 }
             }
         }
@@ -116,13 +116,13 @@ impl LpProblem {
                 )));
             }
             for (i, row) in a_eq.iter().enumerate() {
-                if row.len() != n {
-                    return Err(BatchLpError::InvalidDimensions(format!(
-                        "Equality constraint row {} has {} columns, expected {}",
-                        i,
-                        row.len(),
-                        n
-                    )));
+                for &(col, _) in row {
+                    if col >= n {
+                        return Err(BatchLpError::InvalidDimensions(format!(
+                            "Equality constraint row {} has column index {}, expected < {}",
+                            i, col, n
+                        )));
+                    }
                 }
             }
         }
@@ -156,12 +156,9 @@ impl LpProblem {
         for i in 0..m_ineq {
             let row_factors: Vec<(Col, f64)> = self.a_ineq[i]
                 .iter()
-                .enumerate()
-                .filter(|(_, &coeff)| coeff != 0.0)
-                .map(|(j, &coeff)| (cols[j], coeff))
+                .map(|&(j, coeff)| (cols[j], coeff))
                 .collect();
 
-            // Add constraint: sum <= b_ineq[i]
             problem.add_row(..=self.b_ineq[i], &row_factors);
         }
 
@@ -169,12 +166,9 @@ impl LpProblem {
         for i in 0..m_eq {
             let row_factors: Vec<(Col, f64)> = self.a_eq[i]
                 .iter()
-                .enumerate()
-                .filter(|(_, &coeff)| coeff != 0.0)
-                .map(|(j, &coeff)| (cols[j], coeff))
+                .map(|&(j, coeff)| (cols[j], coeff))
                 .collect();
 
-            // Add constraint: sum == b_eq[i]
             problem.add_row(self.b_eq[i]..=self.b_eq[i], &row_factors);
         }
 
@@ -242,7 +236,7 @@ mod tests {
         //      x, y >= 0
         let problem = LpProblem::new(
             vec![-1.0, -1.0],                   // c
-            vec![vec![1.0, 1.0]],               // A
+            vec![vec![(0, 1.0), (1, 1.0)]],     // A (sparse rows)
             vec![2.0],                          // b
             vec![],                             // A_eq
             vec![],                             // b_eq
@@ -260,7 +254,7 @@ mod tests {
     fn test_batch_solve() {
         let problem1 = LpProblem::new(
             vec![1.0, 1.0],
-            vec![vec![1.0, 0.0], vec![0.0, 1.0]],
+            vec![vec![(0, 1.0)], vec![(1, 1.0)]], // sparse: only nonzero entries
             vec![1.0, 1.0],
             vec![],
             vec![],
@@ -271,7 +265,7 @@ mod tests {
 
         let problem2 = LpProblem::new(
             vec![-1.0, -1.0],
-            vec![vec![1.0, 1.0]],
+            vec![vec![(0, 1.0), (1, 1.0)]],
             vec![2.0],
             vec![],
             vec![],

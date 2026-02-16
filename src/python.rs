@@ -4,8 +4,61 @@ use pyo3::prelude::*;
 
 use crate::LpProblem;
 
+/// Extract an index array (indptr or indices) from a Python object.
+/// Handles both int32 and int64 NumPy arrays.
+fn extract_index_array(obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
+    if let Ok(arr) = obj.extract::<PyReadonlyArray1<i32>>() {
+        return Ok(arr.as_slice()?.iter().map(|&x| x as usize).collect());
+    }
+    let arr: PyReadonlyArray1<i64> = obj.extract()?;
+    Ok(arr.as_slice()?.iter().map(|&x| x as usize).collect())
+}
+
+/// Extract a constraint matrix from a Python object.
+/// Accepts either a dense NumPy 2D array or a SciPy sparse matrix.
+/// Returns sparse rows: Vec<Vec<(col_index, coefficient)>>.
+fn extract_matrix(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<(usize, f64)>>> {
+    // Try dense NumPy array first
+    if let Ok(a) = obj.extract::<PyReadonlyArray2<f64>>() {
+        let a_array = a.as_array();
+        let mut rows = Vec::with_capacity(a_array.shape()[0]);
+        for row_i in 0..a_array.shape()[0] {
+            let row: Vec<(usize, f64)> = (0..a_array.shape()[1])
+                .map(|j| (j, a_array[[row_i, j]]))
+                .filter(|(_, v)| *v != 0.0)
+                .collect();
+            rows.push(row);
+        }
+        return Ok(rows);
+    }
+
+    // Assume SciPy sparse matrix — convert to CSR and extract arrays
+    let csr = obj.call_method0("tocsr")?;
+    let shape: (usize, usize) = csr.getattr("shape")?.extract()?;
+    let m = shape.0;
+
+    let indptr = extract_index_array(&csr.getattr("indptr")?)?;
+    let indices = extract_index_array(&csr.getattr("indices")?)?;
+    let data: PyReadonlyArray1<f64> = csr.getattr("data")?.extract()?;
+    let data = data.as_slice()?;
+
+    let mut rows = Vec::with_capacity(m);
+    for row_i in 0..m {
+        let start = indptr[row_i];
+        let end = indptr[row_i + 1];
+        let row: Vec<(usize, f64)> = (start..end).map(|idx| (indices[idx], data[idx])).collect();
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
 /// Extract a single bound element: None → fill with `default`, scalar → broadcast, array → per-variable.
-fn extract_bound(_py: Python, obj: &Bound<'_, PyAny>, n: usize, default: f64) -> PyResult<Vec<f64>> {
+fn extract_bound(
+    _py: Python,
+    obj: &Bound<'_, PyAny>,
+    n: usize,
+    default: f64,
+) -> PyResult<Vec<f64>> {
     if obj.is_none() {
         return Ok(vec![default; n]);
     }
@@ -17,15 +70,11 @@ fn extract_bound(_py: Python, obj: &Bound<'_, PyAny>, n: usize, default: f64) ->
 }
 
 /// Extract bounds tuple: (lower, upper) where each element is None, scalar, or array.
-fn extract_bounds(
-    py: Python,
-    bounds: &PyObject,
-    n: usize,
-) -> PyResult<(Vec<f64>, Vec<f64>)> {
+fn extract_bounds(py: Python, bounds: &PyObject, n: usize) -> PyResult<(Vec<f64>, Vec<f64>)> {
     let tuple = bounds.bind(py);
-    let tuple = tuple.downcast::<pyo3::types::PyTuple>().map_err(|_| {
-        PyValueError::new_err("'bounds' must be a tuple of (lower, upper)")
-    })?;
+    let tuple = tuple
+        .downcast::<pyo3::types::PyTuple>()
+        .map_err(|_| PyValueError::new_err("'bounds' must be a tuple of (lower, upper)"))?;
     if tuple.len() != 2 {
         return Err(PyValueError::new_err(
             "'bounds' must be a tuple of exactly 2 elements (lower, upper)",
@@ -180,21 +229,9 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
 
     // Extract A and b
     let (a_ineq, b_ineq) = if let (Some(a_obj), Some(b_obj)) = (&problem_ref.A, &problem_ref.b) {
-        let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+        let a_vec = extract_matrix(a_obj.bind(py))?;
         let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
-
-        let a_array = a.as_array();
-        let b_vec = b.as_slice()?.to_vec();
-
-        let mut a_vec = Vec::new();
-        for row_i in 0..a_array.shape()[0] {
-            let row: Vec<f64> = (0..a_array.shape()[1])
-                .map(|j| a_array[[row_i, j]])
-                .collect();
-            a_vec.push(row);
-        }
-
-        (a_vec, b_vec)
+        (a_vec, b.as_slice()?.to_vec())
     } else if problem_ref.A.is_some() || problem_ref.b.is_some() {
         return Err(PyValueError::new_err(
             "Both 'A' and 'b' must be provided together",
@@ -206,21 +243,9 @@ fn solve_lp<'py>(py: Python<'py>, problem: Py<Problem>) -> PyResult<PySolution> 
     // Extract A_eq and b_eq
     let (a_eq_vec, b_eq_vec) =
         if let (Some(a_obj), Some(b_obj)) = (&problem_ref.A_eq, &problem_ref.b_eq) {
-            let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+            let a_vec = extract_matrix(a_obj.bind(py))?;
             let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
-
-            let a_array = a.as_array();
-            let b_vec = b.as_slice()?.to_vec();
-
-            let mut a_vec = Vec::new();
-            for row_i in 0..a_array.shape()[0] {
-                let row: Vec<f64> = (0..a_array.shape()[1])
-                    .map(|j| a_array[[row_i, j]])
-                    .collect();
-                a_vec.push(row);
-            }
-
-            (a_vec, b_vec)
+            (a_vec, b.as_slice()?.to_vec())
         } else if problem_ref.A_eq.is_some() || problem_ref.b_eq.is_some() {
             return Err(PyValueError::new_err(
                 "Both 'A_eq' and 'b_eq' must be provided together",
@@ -284,21 +309,9 @@ fn solve_batch_lp(
 
         // Extract A and b
         let (a_ineq, b_ineq) = if let (Some(a_obj), Some(b_obj)) = (&problem.A, &problem.b) {
-            let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+            let a_vec = extract_matrix(a_obj.bind(py))?;
             let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
-
-            let a_array = a.as_array();
-            let b_vec = b.as_slice()?.to_vec();
-
-            let mut a_vec = Vec::new();
-            for row_i in 0..a_array.shape()[0] {
-                let row: Vec<f64> = (0..a_array.shape()[1])
-                    .map(|j| a_array[[row_i, j]])
-                    .collect();
-                a_vec.push(row);
-            }
-
-            (a_vec, b_vec)
+            (a_vec, b.as_slice()?.to_vec())
         } else if problem.A.is_some() || problem.b.is_some() {
             return Err(PyValueError::new_err(format!(
                 "Problem {}: Both 'A' and 'b' must be provided together",
@@ -311,21 +324,9 @@ fn solve_batch_lp(
         // Extract A_eq and b_eq
         let (a_eq_vec, b_eq_vec) =
             if let (Some(a_obj), Some(b_obj)) = (&problem.A_eq, &problem.b_eq) {
-                let a: PyReadonlyArray2<f64> = a_obj.bind(py).extract()?;
+                let a_vec = extract_matrix(a_obj.bind(py))?;
                 let b: PyReadonlyArray1<f64> = b_obj.bind(py).extract()?;
-
-                let a_array = a.as_array();
-                let b_vec = b.as_slice()?.to_vec();
-
-                let mut a_vec = Vec::new();
-                for row_i in 0..a_array.shape()[0] {
-                    let row: Vec<f64> = (0..a_array.shape()[1])
-                        .map(|j| a_array[[row_i, j]])
-                        .collect();
-                    a_vec.push(row);
-                }
-
-                (a_vec, b_vec)
+                (a_vec, b.as_slice()?.to_vec())
             } else if problem.A_eq.is_some() || problem.b_eq.is_some() {
                 return Err(PyValueError::new_err(format!(
                     "Problem {}: Both 'A_eq' and 'b_eq' must be provided together",

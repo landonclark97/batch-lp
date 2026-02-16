@@ -1,6 +1,6 @@
 [package]
 name = "batch-lp"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 authors = ["batch-lp contributors"]
 description = "High-performance batched linear programming solver using HiGHS with parallel execution"
